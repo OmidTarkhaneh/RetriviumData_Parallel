@@ -238,6 +238,9 @@ def Collect_Final_Matrix(df_final):
     with multiprocessing.Pool() as p:
         results = list(tqdm( p.imap(DataGathering, files), total=filesize))
         
+    for i in range(len(results)):
+           results[i]=results[i][1:,1:]    
+
     Main_Array = np.stack(results)
 
     return Main_Array
@@ -275,6 +278,10 @@ def generate_dzfiles(Matrix_overall, df_final):
     return data,label
 
 
+def changeidtype(file):
+    file=int(file[1:])
+    return file
+
 # Main func to extract all necessary items from cml files and then saving in a dataframe
 def build_dataframe(Formula):
     # get list of cml files and extract it in cmlfiles folder
@@ -282,19 +289,23 @@ def build_dataframe(Formula):
     Filenames = [filename for filename in Filenames if Formula in filename]
     dframes=[]
     dfcarts=[]
-    
+    df_adj_index=[]
+
+
     with multiprocessing.Pool() as p:
         r = list(tqdm( p.imap(extract, Filenames), total=len(Filenames)))
-                
+  
+
+
     for df_cart, df_atomtypes in r:
         dfcarts.append(df_cart)
         dframes.append(df_atomtypes)
-    
+     
+
     df_cartesian=pd.concat(dfcarts)
     df_atomt=pd.concat(dframes)
     df_atomt.drop_duplicates(inplace=True)
-    
-    
+  
     df_atomt.sort_values(by=['file_id','id'], inplace=True)
     df_cartesian.sort_values(by=['file_id','id'], inplace=True)
     df_final=df_cartesian.merge(df_atomt, on=['file_id','id'])
@@ -303,8 +314,13 @@ def build_dataframe(Formula):
     replace_atoms = {"elementType": {"C": 6, "N": 7, "O": 8, "H": 1}}  
     df_final=df_final.replace(replace_atoms)
     df_final=df_final.astype({'x3': np.float64, 'y3':np.float64, 'z3':np.float64})
-    for i in range(len(df_final)):
-        df_final['id'][i]=int(df_final['id'][i][1:])
+
+    df_final_size=len(df_final)
+    templst=list(df_final['id'])
+    with multiprocessing.Pool() as p:
+        idchanged=list(tqdm(p.imap(changeidtype, templst),total=df_final_size))
+  
+    df_final['id']=idchanged
     df_final.to_csv('Final_Ret.csv')
     
     return  df_final
@@ -316,6 +332,7 @@ def main():
     Matrix_overall= Collect_Final_Matrix(df_final)
 
     data, label = generate_dzfiles(Matrix_overall, df_final) 
+
 
     delete_cmls() 
 
